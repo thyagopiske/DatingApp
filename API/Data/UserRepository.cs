@@ -48,8 +48,8 @@ namespace API.Data
 
         public async Task<PagedList<MemberDto>> GetMembersAsync(UserParams userParams)
         {
-            var minDob = DateTime.Today.AddYears(-userParams.MaxAge-1);
-            var maxDob = DateTime.Today.AddYears(-userParams.MinAge);
+            var minDob = DateTime.UtcNow.AddYears(-userParams.MaxAge-1);
+            var maxDob = DateTime.UtcNow.AddYears(-userParams.MinAge);
 
             var query = _context.Users
                         .Where(u => u.UserName != userParams.CurrentUsername)

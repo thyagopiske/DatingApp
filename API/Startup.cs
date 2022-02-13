@@ -32,6 +32,9 @@ namespace API
         {
             app.UseMiddleware<ExceptionMiddleware>();
             
+            AppContext.SetSwitch("Npgsql.DisableDateTimeInfinityConversions", true);
+
+            
             if (env.IsDevelopment())
             {
                 app.UseSwagger();
