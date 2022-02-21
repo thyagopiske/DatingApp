@@ -1,47 +1,68 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using API.Data;
-using API.Entity;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
+var builder = WebApplication.CreateBuilder(args);
 
-namespace API
+//add services to the container
+
+builder.Services.AddApplicationServices(builder.Configuration);
+builder.Services.AddControllers();
+builder.Services.AddCors();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(c =>
 {
-    public class Program
-    {
-        public static async Task Main(string[] args)
-        {
-            var host = CreateHostBuilder(args).Build();
-            using var scope = host.Services.CreateScope();
-            var services = scope.ServiceProvider;
-            try
-            {
-                var context = services.GetRequiredService<DataContext>();
-                var userManager = services.GetRequiredService<UserManager<AppUser>>();
-                var roleManager = services.GetRequiredService<RoleManager<AppRole>>();
-                await context.Database.MigrateAsync();
-                await Seed.SeedUsers(userManager, roleManager);
-            }
-            catch (Exception ex)
-            {
-                var logger = services.GetRequiredService<ILogger<Program>>();
-                logger.LogError(ex, "An error occurred during migration");
-            }
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "WebAPIv5", Version = "v1" });
+});
+builder.Services.AddIdentityServices(builder.Configuration);
+builder.Services.AddSignalR();
 
-            await host.RunAsync();
-        }
+//Configure the HTTP request pipeline
 
-        public static IHostBuilder CreateHostBuilder(string[] args) =>
-            Host.CreateDefaultBuilder(args)
-                .ConfigureWebHostDefaults(webBuilder =>
-                {
-                    webBuilder.UseStartup<Startup>();
-                });
-    }
+var app = builder.Build();
+
+app.UseMiddleware<ExceptionMiddleware>();
+
+AppContext.SetSwitch("Npgsql.DisableDateTimeInfinityConversions", true);
+
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "WebAPIv5 v1"));
 }
+
+app.UseHttpsRedirection();
+
+app.UseCors(policy => policy
+    .AllowAnyHeader()
+    .AllowCredentials()
+    .AllowAnyMethod()
+    .WithOrigins("https://localhost:4200"));
+
+app.UseAuthentication();
+
+app.UseAuthorization();
+
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
+// Endpoints
+app.MapControllers();
+app.MapHub<PresenceHub>("hubs/presence"); 
+app.MapHub<MessageHub>("hubs/message"); 
+app.MapFallbackToController("Index", "Fallback");
+
+using var scope = app.Services.CreateScope();
+var services = scope.ServiceProvider;
+try
+{
+    var context = services.GetRequiredService<DataContext>();
+    var userManager = services.GetRequiredService<UserManager<AppUser>>();
+    var roleManager = services.GetRequiredService<RoleManager<AppRole>>();
+    await context.Database.MigrateAsync();
+    await Seed.SeedUsers(userManager, roleManager);
+}
+catch (Exception ex)
+{
+    var logger = services.GetRequiredService<ILogger<Program>>();
+    logger.LogError(ex, "An error occurred during migration");
+}
+
+await app.RunAsync();
